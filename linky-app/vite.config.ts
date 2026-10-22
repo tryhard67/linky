@@ -11,7 +11,7 @@ async function translateText(text: string): Promise<string> {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(text)}`;
     const res = await fetch(url);
     if (res.ok) {
-      const data = await res.json();
+      const data = (await res.json()) as any;
       const translated = data?.[0]?.map((s: any) => s[0]).join('')?.trim();
       if (translated) return translated;
     }
