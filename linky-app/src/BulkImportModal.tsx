@@ -253,18 +253,18 @@ export default function BulkImportModal({ pb, userId, onClose, onSuccess }: Prop
                     fontSize: '0.85rem'
                   }}
                 >
-                  <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '1rem' }}>
-                    <div style={{ color: '#eee', fontWeight: item.status === 'processing' ? 600 : 400 }}>
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '0.75rem' }}>
+                    <div style={{ color: '#eee', fontWeight: item.status === 'processing' ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {item.title || item.url}
                     </div>
-                    {item.title && <div style={{ fontSize: '0.75rem', color: '#666' }}>{item.url}</div>}
+                    {item.title && <div style={{ fontSize: '0.75rem', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.url}</div>}
                   </div>
 
-                  <div>
+                  <div style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
                     {item.status === 'pending' && <span style={{ color: '#666' }}>⏳ Pending</span>}
-                    {item.status === 'processing' && <span style={{ color: '#38bdf8' }}>🔄 Fetching & Saving...</span>}
+                    {item.status === 'processing' && <span style={{ color: '#38bdf8' }}>🔄 Saving...</span>}
                     {item.status === 'success' && <span style={{ color: '#4ade80' }}>✅ Saved</span>}
-                    {item.status === 'error' && <span style={{ color: '#f87171' }} title={item.error}>❌ {item.error || 'Failed'}</span>}
+                    {item.status === 'error' && <span style={{ color: '#f87171' }} title={item.error}>❌ Failed</span>}
                   </div>
                 </div>
               ))}

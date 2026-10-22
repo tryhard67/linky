@@ -52,20 +52,47 @@ function App() {
 
   return (
     <div>
-      <header style={{ padding: '1.5rem', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Library</h1>
-        <div>
+      <header className="app-header">
+        <div className="header-top">
+          <h1 className="app-title">Library</h1>
           {isLoggedIn ? (
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-              <span style={{ color: '#a3a3a3', fontSize: '0.875rem' }}>{user?.username}</span>
-              <button onClick={() => { setEditingItem(null); setShowForm(true); }} className="btn" style={{ padding: '0.5rem 1rem' }}>+ Add</button>
-              <button onClick={() => setShowBulkImport(true)} className="btn" style={{ padding: '0.5rem 1rem' }}>Bulk Import</button>
-              <button onClick={handleLogout} className="btn btn-danger" style={{ padding: '0.5rem 1rem' }}>Logout</button>
-            </div>
+            <span className="nav-user-badge header-user-mobile">
+              👤 {user?.username}
+            </span>
           ) : (
-            <button onClick={() => setShowLogin(true)} className="btn btn-danger" style={{ padding: '0.5rem 1rem' }}>Admin Login</button>
+            <button onClick={() => setShowLogin(true)} className="btn btn-danger nav-btn">
+              Admin Login
+            </button>
           )}
         </div>
+
+        {isLoggedIn && (
+          <div className="header-nav">
+            <span className="nav-user-badge header-user-desktop">
+              👤 {user?.username}
+            </span>
+            <div className="nav-actions">
+              <button 
+                onClick={() => { setEditingItem(null); setShowForm(true); }} 
+                className="btn nav-btn"
+              >
+                + Add
+              </button>
+              <button 
+                onClick={() => setShowBulkImport(true)} 
+                className="btn nav-btn"
+              >
+                Bulk Import
+              </button>
+              <button 
+                onClick={handleLogout} 
+                className="btn btn-danger nav-btn"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       <main>

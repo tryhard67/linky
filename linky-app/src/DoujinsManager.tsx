@@ -234,7 +234,7 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
           </div>
 
           <div className="input-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <label style={{ margin: 0 }}>Name</label>
               {/[^\u0000-\u007F]/.test(formData.field) && (
                 <button

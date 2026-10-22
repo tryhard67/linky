@@ -20,6 +20,22 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
+  const [mobileCols, setMobileCols] = useState<'1' | '2'>(() => {
+    try {
+      const saved = localStorage.getItem('linky_mobile_cols');
+      return saved === '2' ? '2' : '1';
+    } catch {
+      return '1';
+    }
+  });
+
+  const handleToggleMobileCols = (cols: '1' | '2') => {
+    setMobileCols(cols);
+    try {
+      localStorage.setItem('linky_mobile_cols', cols);
+    } catch {}
+  };
+
   const fetchPage = async (pageToFetch: number, isRefresh: boolean = false) => {
     if (loading) return;
     setLoading(true);
@@ -81,8 +97,44 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
   };
 
   return (
-    <div style={{ padding: '2rem 1rem', maxWidth: '1400px', margin: '0 auto' }}>
-      <div className="library-grid">
+    <div className="library-container">
+      <div className="library-toolbar">
+        <div className="library-info">
+          {doujins.length > 0 && (
+            <span className="library-count-badge">{doujins.length} items</span>
+          )}
+        </div>
+        <div className="library-view-switcher">
+          <span className="switcher-label">View:</span>
+          <div className="switcher-group">
+            <button
+              type="button"
+              className={`switcher-btn ${mobileCols === '1' ? 'active' : ''}`}
+              onClick={() => handleToggleMobileCols('1')}
+              title="Single column"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+              </svg>
+              <span>1 Col</span>
+            </button>
+            <button
+              type="button"
+              className={`switcher-btn ${mobileCols === '2' ? 'active' : ''}`}
+              onClick={() => handleToggleMobileCols('2')}
+              title="Double column"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="3" y="3" width="8" height="18" rx="1.5" />
+                <rect x="13" y="3" width="8" height="18" rx="1.5" />
+              </svg>
+              <span>2 Col</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className={`library-grid ${mobileCols === '2' ? 'cols-2' : 'cols-1'}`}>
         {doujins.map((item, index) => {
           const isLast = index === doujins.length - 1;
           const imgUrl = item.thumb ? `${import.meta.env.VITE_POCKETBASE_URL}/api/files/${item.collectionId}/${item.id}/${item.thumb}` : null;
@@ -90,26 +142,44 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
           return (
             <div key={item.id} className="library-item" ref={isLast ? lastElementRef : null}>
               <a href={item.nhurl} target="_blank" rel="noreferrer" className="library-item-link">
-                {imgUrl ? (
-                  <img src={imgUrl} alt={item.field} loading="lazy" />
-                ) : (
-                  <div style={{ padding: '2rem', textAlign: 'center', background: '#111', color: '#666' }}>
-                    No Thumbnail
-                  </div>
-                )}
+                <div className="library-thumb-wrapper">
+                  {imgUrl ? (
+                    <img src={imgUrl} alt={item.field} loading="lazy" className="library-thumb-img" />
+                  ) : (
+                    <div className="library-no-thumb">
+                      <span style={{ fontSize: '1.5rem' }}>🖼️</span>
+                      <span>No Thumbnail</span>
+                    </div>
+                  )}
+                  {item.code ? (
+                    <span className="library-code-badge">#{item.code}</span>
+                  ) : null}
+                </div>
                 <div className="library-item-content">
-                  <div className="library-item-title">{item.field || 'Untitled'}</div>
-                  <div className="library-item-meta">Code: {item.code}</div>
+                  <div className="library-item-title" title={item.field || 'Untitled'}>
+                    {item.field || 'Untitled'}
+                  </div>
+                  <div className="library-item-meta">
+                    <span className="library-source-badge">
+                      {item.nhurl.includes('youtube') || item.nhurl.includes('youtu.be') ? '▶ YouTube' : item.nhurl.includes('nhentai') ? '📖 nhentai' : '🔗 Link'}
+                    </span>
+                  </div>
                 </div>
               </a>
               
               {userId && (
                 <div className="library-item-actions">
-                  <button onClick={() => onEdit(item)} className="btn" style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}>Edit</button>
                   <button 
+                    type="button"
+                    onClick={() => onEdit(item)} 
+                    className="btn card-btn"
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    type="button"
                     onClick={() => { setItemToDelete(item); setDeleteError(''); }} 
-                    className="btn btn-danger" 
-                    style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}
+                    className="btn btn-danger card-btn"
                   >
                     Delete
                   </button>
