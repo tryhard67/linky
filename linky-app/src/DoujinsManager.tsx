@@ -21,7 +21,89 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
   const [manualFile, setManualFile] = useState<File | null>(null);
   const [isFetchingThumb, setIsFetchingThumb] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [pasteFeedback, setPasteFeedback] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleImageFile = (file: File) => {
+    setManualFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+    setPasteFeedback({
+      type: 'success',
+      text: `Image set: ${file.name || 'clipboard image'} (${(file.size / 1024).toFixed(0)} KB)`
+    });
+    setTimeout(() => setPasteFeedback(null), 3500);
+  };
+
+  const handleClipboardPasteBtn = async () => {
+    setPasteFeedback(null);
+    try {
+      if (navigator.clipboard && navigator.clipboard.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const imageType = item.types.find(t => t.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            const ext = imageType.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+            const file = new File([blob], `clipboard_${Date.now()}.${ext}`, { type: imageType });
+            handleImageFile(file);
+            return;
+          }
+        }
+        setPasteFeedback({ type: 'error', text: 'No image found on clipboard. Copy an image first.' });
+        setTimeout(() => setPasteFeedback(null), 3500);
+      } else {
+        setPasteFeedback({
+          type: 'info',
+          text: 'Clipboard API unavailable. On desktop, press Ctrl+V / Cmd+V to paste.'
+        });
+        setTimeout(() => setPasteFeedback(null), 4000);
+      }
+    } catch (err: any) {
+      console.warn('Clipboard read error:', err);
+      if (err.name === 'NotAllowedError') {
+        setPasteFeedback({
+          type: 'error',
+          text: 'Clipboard permission was denied. Please grant permission to paste.'
+        });
+      } else {
+        setPasteFeedback({
+          type: 'error',
+          text: err.message || 'Could not access clipboard image.'
+        });
+      }
+      setTimeout(() => setPasteFeedback(null), 4000);
+    }
+  };
+
+  const handleClearImage = () => {
+    setManualFile(null);
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setPasteFeedback(null);
+  };
+
+  // Global window paste listener for Cmd+V / Ctrl+V
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleImageFile(file);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
 
   const [formData, setFormData] = useState<DoujinPayload>({
     nhurl: itemToEdit?.nhurl || '',
@@ -139,9 +221,7 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setManualFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      handleImageFile(e.target.files[0]);
     }
   };
 
@@ -264,20 +344,103 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#a3a3a3' }}>Thumbnail Preview</label>
-            <div style={{ minHeight: '120px', background: '#000', borderRadius: '8px', border: '1px dashed #333', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <label style={{ margin: 0, fontSize: '0.875rem', color: '#a3a3a3', fontWeight: 500 }}>
+                Thumbnail
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={handleClipboardPasteBtn}
+                  className="btn"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    color: '#ffffff',
+                    border: '1px solid rgba(255, 255, 255, 0.25)',
+                    padding: '4px 10px',
+                    fontSize: '0.775rem',
+                    borderRadius: '6px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: 'pointer'
+                  }}
+                  title="Paste copied image from clipboard"
+                >
+                  📋 Paste Image from Clipboard
+                </button>
+                {manualFile && (
+                  <button
+                    type="button"
+                    onClick={handleClearImage}
+                    style={{
+                      background: 'transparent',
+                      color: '#f87171',
+                      border: '1px solid rgba(248, 113, 113, 0.4)',
+                      padding: '4px 8px',
+                      fontSize: '0.75rem',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✕ Clear
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {pasteFeedback && (
+              <div style={{
+                padding: '0.45rem 0.75rem',
+                marginBottom: '0.5rem',
+                borderRadius: '6px',
+                fontSize: '0.8rem',
+                background: pasteFeedback.type === 'success' ? 'rgba(74, 222, 128, 0.15)' : 'rgba(248, 113, 113, 0.15)',
+                color: pasteFeedback.type === 'success' ? '#4ade80' : '#f87171',
+                border: `1px solid ${pasteFeedback.type === 'success' ? 'rgba(74, 222, 128, 0.3)' : 'rgba(248, 113, 113, 0.3)'}`
+              }}>
+                {pasteFeedback.text}
+              </div>
+            )}
+
+            <div 
+              style={{ 
+                minHeight: '140px', 
+                background: '#050505', 
+                borderRadius: '8px', 
+                border: '1px dashed #333', 
+                display: 'flex', 
+                flexDirection: 'column',
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                overflow: 'hidden', 
+                marginBottom: '0.6rem',
+                padding: previewUrl ? '0' : '1.25rem',
+                position: 'relative'
+              }}
+            >
               {isFetchingThumb ? (
-                <span style={{ color: '#666' }}>Extracting...</span>
+                <span style={{ color: '#888', fontSize: '0.875rem' }}>🔄 Extracting thumbnail...</span>
               ) : previewUrl ? (
-                <img src={previewUrl} alt="Preview" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                <img src={previewUrl} alt="Preview" style={{ width: '100%', maxHeight: '300px', objectFit: 'contain', display: 'block' }} />
               ) : (
-                <span style={{ color: '#666' }}>Enter URL or upload custom image</span>
+                <div style={{ textAlign: 'center', color: '#666', fontSize: '0.85rem' }}>
+                  <div style={{ fontSize: '1.5rem', marginBottom: '0.35rem' }}>📋 / 🖼️</div>
+                  <div>Tap <strong>Paste Image from Clipboard</strong>, press <strong>Ctrl+V</strong>,</div>
+                  <div style={{ marginTop: '0.2rem', fontSize: '0.75rem', color: '#555' }}>or browse a file below</div>
+                </div>
               )}
             </div>
 
-            <div style={{ fontSize: '0.8rem', color: '#888' }}>
-              Custom Image File (optional):
-              <input type="file" accept="image/*" onChange={handleFileChange} style={{ marginTop: '0.25rem', color: '#ccc', width: '100%' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#888', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <span>Or select file:</span>
+              <input 
+                ref={fileInputRef}
+                type="file" 
+                accept="image/*" 
+                onChange={handleFileChange} 
+                style={{ color: '#ccc', maxWidth: '200px', fontSize: '0.75rem' }} 
+              />
             </div>
           </div>
 

@@ -39,25 +39,38 @@ function nhentaiDevProxyPlugin(): Plugin {
           let coverUrl = '';
           let title = '';
 
+          // 1. Try Cubari nhentai API (official direct resolution for nhentai.net gallery IDs)
           try {
-            const resp = await fetch(`https://nhentai.to/g/${id}`);
+            const resp = await fetch(`https://cubari.moe/read/api/nhentai/series/${id}/`, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              }
+            });
             if (resp.ok) {
-              const html = await resp.text();
-              const coverMatch = html.match(/id="cover"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i) 
-                || html.match(/<img[^>]+src="([^"]+cover[^"]*)"/i);
-              if (coverMatch && coverMatch[1]) {
-                coverUrl = coverMatch[1];
-              }
-              const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-              if (titleMatch && titleMatch[1]) {
-                title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
-              }
+              const data = await resp.json() as any;
+              if (data?.cover) coverUrl = data.cover;
+              if (data?.title) title = data.title;
             }
           } catch (_) {}
 
+          // 2. Fallback to Cubari reader page
           if (!coverUrl) {
             try {
-              const resp = await fetch(`https://nhentai.xxx/g/${id}`);
+              const resp = await fetch(`https://cubari.moe/read/nhentai/${id}/`);
+              if (resp.ok) {
+                const html = await resp.text();
+                const match = html.match(/id="history_coverUrl"[^>]*>"([^"]+)"/i);
+                if (match && match[1]) coverUrl = match[1];
+                const titleMatch = html.match(/<title>Read\s+([^|]+?)\s*\|\s*Cubari<\/title>/i);
+                if (titleMatch && titleMatch[1]) title = titleMatch[1].trim();
+              }
+            } catch (_) {}
+          }
+
+          // 3. Fallback to nhentai.to mirror
+          if (!coverUrl) {
+            try {
+              const resp = await fetch(`https://nhentai.to/g/${id}`);
               if (resp.ok) {
                 const html = await resp.text();
                 const coverMatch = html.match(/id="cover"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i) 
