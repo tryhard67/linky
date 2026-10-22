@@ -20,7 +20,8 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [manualFile, setManualFile] = useState<File | null>(null);
   const [isFetchingThumb, setIsFetchingThumb] = useState(false);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [formData, setFormData] = useState<DoujinPayload>({
     nhurl: itemToEdit?.nhurl || '',
@@ -60,23 +61,55 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
             field: !prev.field.trim() ? `Doujin #${nhCode}` : prev.field
           }));
 
-          // Direct cover image resolution
-          imageUrl = `https://t3.nhentai.net/galleries/${nhCode}/cover.jpg`;
+          try {
+            const metaRes = await fetch(`/api/nh-metadata?id=${nhCode}`);
+            if (metaRes.ok) {
+              const metaData = await metaRes.json();
+              if (metaData.title) {
+                setFormData(prev => (!prev.field || prev.field.startsWith('Doujin #') ? { ...prev, field: metaData.title } : prev));
+              }
+              if (metaData.coverUrl) {
+                imageUrl = `/api/proxy-image?url=${encodeURIComponent(metaData.coverUrl)}`;
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to fetch nh metadata:", e);
+          }
         } else if (ytMatch && ytMatch[1]) {
           imageUrl = `https://img.youtube.com/vi/${ytMatch[1]}/maxresdefault.jpg`;
           fetch(`https://api.microlink.io/?url=${encodeURIComponent(formData.nhurl)}`)
             .then(res => res.json())
-            .then(mlData => {
-              const metaTitle = mlData?.data?.title;
-              if (metaTitle) setFormData(prev => (!prev.field.trim() ? { ...prev, field: metaTitle } : prev));
+            .then(async mlData => {
+              let metaTitle = mlData?.data?.title;
+              if (metaTitle) {
+                if (/[^\u0000-\u007F]/.test(metaTitle)) {
+                  try {
+                    const trRes = await fetch(`/api/translate?text=${encodeURIComponent(metaTitle)}`);
+                    if (trRes.ok) {
+                      const trData = await trRes.json();
+                      if (trData.translated) metaTitle = trData.translated;
+                    }
+                  } catch (_) {}
+                }
+                setFormData(prev => (!prev.field.trim() ? { ...prev, field: metaTitle } : prev));
+              }
             }).catch(() => { });
         } else if (!formData.nhurl.includes('nhentai.net')) {
           try {
             const mlRes = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(formData.nhurl)}`);
             if (mlRes.ok) {
               const mlData = await mlRes.json();
-              const metaTitle = mlData?.data?.title;
+              let metaTitle = mlData?.data?.title;
               if (metaTitle && !metaTitle.includes('Cloudflare')) {
+                if (/[^\u0000-\u007F]/.test(metaTitle)) {
+                  try {
+                    const trRes = await fetch(`/api/translate?text=${encodeURIComponent(metaTitle)}`);
+                    if (trRes.ok) {
+                      const trData = await trRes.json();
+                      if (trData.translated) metaTitle = trData.translated;
+                    }
+                  } catch (_) {}
+                }
                 setFormData(prev => (!prev.field.trim() ? { ...prev, field: metaTitle } : prev));
               }
               imageUrl = mlData?.data?.image?.url || mlData?.data?.logo?.url;
@@ -112,6 +145,24 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
     }
   };
 
+  const handleTranslateField = async () => {
+    if (!formData.field.trim() || isTranslating) return;
+    setIsTranslating(true);
+    try {
+      const res = await fetch(`/api/translate?text=${encodeURIComponent(formData.field)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.translated) {
+          setFormData(prev => ({ ...prev, field: data.translated }));
+        }
+      }
+    } catch (e) {
+      console.warn('Translation failed:', e);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -122,14 +173,23 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
       let filename = manualFile ? manualFile.name : '';
       const pocketbaseUrl = import.meta.env.VITE_POCKETBASE_URL;
 
-      if (!imageBlob && previewUrl && previewUrl.startsWith('http') && (!pocketbaseUrl || !previewUrl.includes(pocketbaseUrl))) {
+      if (!imageBlob && previewUrl && (!pocketbaseUrl || !previewUrl.includes(pocketbaseUrl))) {
         try {
           let imgRes = await fetch(previewUrl).catch(() => null);
-          if (!imgRes || !imgRes.ok) imgRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(previewUrl)}`);
+          if (!imgRes || !imgRes.ok) {
+            if (previewUrl.startsWith('http')) {
+              imgRes = await fetch(`/api/proxy-image?url=${encodeURIComponent(previewUrl)}`).catch(() => null);
+            }
+          }
+          if (!imgRes || !imgRes.ok) {
+            imgRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(previewUrl)}`).catch(() => null);
+          }
           if (imgRes && imgRes.ok) {
             imageBlob = await imgRes.blob();
             let ext = 'jpg';
-            if (imageBlob.type && imageBlob.type.includes('/')) ext = imageBlob.type.split('/')[1];
+            if (imageBlob.type && imageBlob.type.includes('/')) {
+              ext = imageBlob.type.split('/')[1].replace('jpeg', 'jpg');
+            }
             filename = `thumb.${ext}`;
           }
         } catch (e) {
@@ -174,7 +234,27 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
           </div>
 
           <div className="input-group">
-            <label>Name</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label style={{ margin: 0 }}>Name</label>
+              {/[^\u0000-\u007F]/.test(formData.field) && (
+                <button
+                  type="button"
+                  onClick={handleTranslateField}
+                  disabled={isTranslating}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #444',
+                    color: '#38bdf8',
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    fontSize: '0.75rem',
+                    cursor: isTranslating ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isTranslating ? 'Translating...' : '🌐 Translate to English'}
+                </button>
+              )}
+            </div>
             <input type="text" name="field" value={formData.field} onChange={handleInputChange} required />
           </div>
 

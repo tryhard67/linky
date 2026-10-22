@@ -16,6 +16,10 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
   const [loading, setLoading] = useState(false);
   const observer = useRef<IntersectionObserver | null>(null);
 
+  const [itemToDelete, setItemToDelete] = useState<Doujin | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
   const fetchPage = async (pageToFetch: number, isRefresh: boolean = false) => {
     if (loading) return;
     setLoading(true);
@@ -60,14 +64,19 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     if (node) observer.current.observe(node);
   }, [loading, hasMore, page]);
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this record?')) return;
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+    setIsDeleting(true);
+    setDeleteError('');
     try {
-      await pb.collection('doujins').delete(id);
-      setDoujins(prev => prev.filter(d => d.id !== id));
-    } catch (err) {
+      await pb.collection('doujins').delete(itemToDelete.id);
+      setDoujins(prev => prev.filter(d => d.id !== itemToDelete.id));
+      setItemToDelete(null);
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to delete');
+      setDeleteError(err.message || 'Failed to delete record');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -97,7 +106,13 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
               {userId && (
                 <div className="library-item-actions">
                   <button onClick={() => onEdit(item)} className="btn" style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}>Edit</button>
-                  <button onClick={() => handleDelete(item.id)} className="btn btn-danger" style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}>Delete</button>
+                  <button 
+                    onClick={() => { setItemToDelete(item); setDeleteError(''); }} 
+                    className="btn btn-danger" 
+                    style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem' }}
+                  >
+                    Delete
+                  </button>
                 </div>
               )}
             </div>
@@ -110,6 +125,44 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
       )}
       {!hasMore && doujins.length > 0 && (
         <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>No more items</div>
+      )}
+
+      {/* In-Browser Delete Confirmation Modal */}
+      {itemToDelete && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 70, padding: '1rem' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', boxSizing: 'border-box' }}>
+            <h2 style={{ marginTop: 0, fontSize: '1.3rem' }}>Confirm Delete</h2>
+            {deleteError && <div className="error-message">{deleteError}</div>}
+            
+            <p style={{ color: '#ccc', fontSize: '0.95rem', lineHeight: '1.5' }}>
+              Are you sure you want to delete <strong style={{ color: '#fff' }}>"{itemToDelete.field || 'Untitled'}"</strong>?
+            </p>
+            <p style={{ color: '#888', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+              Code: {itemToDelete.code} &bull; This action cannot be undone.
+            </p>
+
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.75rem' }}>
+              <button 
+                type="button" 
+                onClick={confirmDelete} 
+                disabled={isDeleting} 
+                className="btn btn-danger" 
+                style={{ flex: 1 }}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+              <button 
+                type="button" 
+                onClick={() => { setItemToDelete(null); setDeleteError(''); }} 
+                disabled={isDeleting} 
+                className="btn" 
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

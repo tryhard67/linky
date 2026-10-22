@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import PocketBase, { type AuthModel } from 'pocketbase';
 import Library from './Library';
 import DoujinsManager from './DoujinsManager';
+import BulkImportModal from './BulkImportModal';
 import { type Doujin } from './types';
 import './index.css';
 
@@ -16,11 +17,12 @@ function App() {
   
   const [showLogin, setShowLogin] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [editingItem, setEditingItem] = useState<Doujin | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    return pb.authStore.onChange((token, model) => {
+    return pb.authStore.onChange((_token, model) => {
       setIsLoggedIn(pb.authStore.isValid);
       setUser(model);
       if (pb.authStore.isValid) setShowLogin(false);
@@ -54,9 +56,10 @@ function App() {
         <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Library</h1>
         <div>
           {isLoggedIn ? (
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
               <span style={{ color: '#a3a3a3', fontSize: '0.875rem' }}>{user?.username}</span>
               <button onClick={() => { setEditingItem(null); setShowForm(true); }} className="btn" style={{ padding: '0.5rem 1rem' }}>+ Add</button>
+              <button onClick={() => setShowBulkImport(true)} className="btn" style={{ padding: '0.5rem 1rem' }}>Bulk Import</button>
               <button onClick={handleLogout} className="btn btn-danger" style={{ padding: '0.5rem 1rem' }}>Logout</button>
             </div>
           ) : (
@@ -98,7 +101,7 @@ function App() {
       {showForm && isLoggedIn && (
         <DoujinsManager 
           pb={pb} 
-          userId={user.id} 
+          userId={user?.id || ''} 
           itemToEdit={editingItem}
           onClose={() => {
             setShowForm(false);
@@ -107,6 +110,18 @@ function App() {
           onSuccess={() => {
             setShowForm(false);
             setEditingItem(null);
+            setRefreshTrigger(prev => prev + 1); // Trigger library reload
+          }}
+        />
+      )}
+
+      {/* Bulk Import Modal */}
+      {showBulkImport && isLoggedIn && (
+        <BulkImportModal
+          pb={pb}
+          userId={user?.id || ''}
+          onClose={() => setShowBulkImport(false)}
+          onSuccess={() => {
             setRefreshTrigger(prev => prev + 1); // Trigger library reload
           }}
         />
