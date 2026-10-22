@@ -55,7 +55,11 @@ export default function BulkImportModal({ pb, userId, onClose, onSuccess }: Prop
         let code = 0;
         let coverUrl = '';
 
-        const nhMatch = url.match(/nhentai\.net\/g\/(\d+)/);
+        // Match both nhentai.net and nhentai.xxx (separate databases!)
+        const nhNetMatch = url.match(/nhentai\.net\/g\/(\d+)/);
+        const nhXxxMatch = url.match(/nhentai\.xxx\/g\/(\d+)/);
+        const nhMatch = nhNetMatch || nhXxxMatch;
+        const nhSource = nhNetMatch ? 'net' : nhXxxMatch ? 'xxx' : 'net';
         const ytMatch = url.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([^&?\n]+)/);
 
         if (nhMatch && nhMatch[1]) {
@@ -63,7 +67,7 @@ export default function BulkImportModal({ pb, userId, onClose, onSuccess }: Prop
           title = `Doujin #${code}`;
 
           try {
-            const metaRes = await fetch(`/api/nh-metadata?id=${code}`);
+            const metaRes = await fetch(`/api/nh-metadata?id=${code}&source=${nhSource}`);
             if (metaRes.ok) {
               const metaData = await metaRes.json();
               if (metaData.title) title = metaData.title;
@@ -188,7 +192,7 @@ export default function BulkImportModal({ pb, userId, onClose, onSuccess }: Prop
                 value={linksText}
                 onChange={e => setLinksText(e.target.value)}
                 rows={10}
-                placeholder={"https://nhentai.net/g/685252/\nhttps://nhentai.net/g/177013/\nhttps://www.youtube.com/watch?v=..."}
+                placeholder={"https://nhentai.net/g/685252/\nhttps://nhentai.xxx/g/598182\nhttps://www.youtube.com/watch?v=..."}
                 style={{
                   width: '100%',
                   padding: '0.75rem 1rem',

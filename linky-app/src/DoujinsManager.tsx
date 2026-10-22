@@ -132,8 +132,11 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
 
         // 1. YouTube Handler
         const ytMatch = formData.nhurl.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([^&?\n]+)/);
-        // 2. nhentai Handler
-        const nhMatch = formData.nhurl.match(/nhentai\.net\/g\/(\d+)/);
+        // 2. nhentai Handler - match both nhentai.net AND nhentai.xxx (separate databases!)
+        const nhNetMatch = formData.nhurl.match(/nhentai\.net\/g\/(\d+)/);
+        const nhXxxMatch = formData.nhurl.match(/nhentai\.xxx\/g\/(\d+)/);
+        const nhMatch = nhNetMatch || nhXxxMatch;
+        const nhSource = nhNetMatch ? 'net' : nhXxxMatch ? 'xxx' : 'net';
 
         if (nhMatch && nhMatch[1]) {
           const nhCode = parseInt(nhMatch[1], 10);
@@ -144,7 +147,7 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
           }));
 
           try {
-            const metaRes = await fetch(`/api/nh-metadata?id=${nhCode}`);
+            const metaRes = await fetch(`/api/nh-metadata?id=${nhCode}&source=${nhSource}`);
             if (metaRes.ok) {
               const metaData = await metaRes.json();
               if (metaData.title) {
@@ -176,7 +179,7 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
                 setFormData(prev => (!prev.field.trim() ? { ...prev, field: metaTitle } : prev));
               }
             }).catch(() => { });
-        } else if (!formData.nhurl.includes('nhentai.net')) {
+        } else if (!formData.nhurl.includes('nhentai')) {
           try {
             const mlRes = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(formData.nhurl)}`);
             if (mlRes.ok) {
@@ -310,7 +313,7 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
         <form onSubmit={handleSubmit}>
           <div className="input-group">
             <label>URL</label>
-            <input type="url" name="nhurl" value={formData.nhurl} onChange={handleInputChange} required placeholder="https://example.net/g/685252/" />
+            <input type="url" name="nhurl" value={formData.nhurl} onChange={handleInputChange} required placeholder="https://nhentai.net/g/... or nhentai.xxx/g/..." />
           </div>
 
           <div className="input-group">

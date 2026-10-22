@@ -30,6 +30,8 @@ function nhentaiDevProxyPlugin(): Plugin {
         try {
           const urlObj = new URL(req.url || '', 'http://localhost:5173');
           const id = urlObj.searchParams.get('id');
+          const source = urlObj.searchParams.get('source') || 'net';
+
           if (!id) {
             res.statusCode = 400;
             res.end(JSON.stringify({ error: 'Missing gallery id' }));
@@ -39,51 +41,66 @@ function nhentaiDevProxyPlugin(): Plugin {
           let coverUrl = '';
           let title = '';
 
-          // 1. Try Cubari nhentai API (official direct resolution for nhentai.net gallery IDs)
-          try {
-            const resp = await fetch(`https://cubari.moe/read/api/nhentai/series/${id}/`, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-              }
-            });
-            if (resp.ok) {
-              const data = await resp.json() as any;
-              if (data?.cover) coverUrl = data.cover;
-              if (data?.title) title = data.title;
-            }
-          } catch (_) {}
-
-          // 2. Fallback to Cubari reader page
-          if (!coverUrl) {
+          if (source === 'xxx') {
+            // nhentai.xxx - separate database, scrape directly
             try {
-              const resp = await fetch(`https://cubari.moe/read/nhentai/${id}/`);
+              const resp = await fetch(`https://nhentai.xxx/g/${id}`, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+              });
               if (resp.ok) {
                 const html = await resp.text();
-                const match = html.match(/id="history_coverUrl"[^>]*>"([^"]+)"/i);
-                if (match && match[1]) coverUrl = match[1];
-                const titleMatch = html.match(/<title>Read\s+([^|]+?)\s*\|\s*Cubari<\/title>/i);
-                if (titleMatch && titleMatch[1]) title = titleMatch[1].trim();
-              }
-            } catch (_) {}
-          }
-
-          // 3. Fallback to nhentai.to mirror
-          if (!coverUrl) {
-            try {
-              const resp = await fetch(`https://nhentai.to/g/${id}`);
-              if (resp.ok) {
-                const html = await resp.text();
-                const coverMatch = html.match(/id="cover"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i) 
+                const coverMatch = html.match(/id="cover"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i)
                   || html.match(/<img[^>]+src="([^"]+cover[^"]*)"/i);
-                if (coverMatch && coverMatch[1]) {
-                  coverUrl = coverMatch[1];
-                }
+                if (coverMatch && coverMatch[1]) coverUrl = coverMatch[1];
                 const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-                if (titleMatch && titleMatch[1]) {
-                  title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
-                }
+                if (titleMatch && titleMatch[1]) title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
               }
             } catch (_) {}
+          } else {
+            // nhentai.net - Cubari API → Cubari page → nhentai.to (NEVER nhentai.xxx)
+            try {
+              const resp = await fetch(`https://cubari.moe/read/api/nhentai/series/${id}/`, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+              });
+              if (resp.ok) {
+                const data = (await resp.json()) as any;
+                if (data?.cover) coverUrl = data.cover;
+                if (data?.title) title = data.title;
+              }
+            } catch (_) {}
+
+            if (!coverUrl) {
+              try {
+                const resp = await fetch(`https://cubari.moe/read/nhentai/${id}/`);
+                if (resp.ok) {
+                  const html = await resp.text();
+                  const match = html.match(/id="history_coverUrl"[^>]*>"([^"]+)"/i);
+                  if (match && match[1]) coverUrl = match[1];
+                  if (!title) {
+                    const titleMatch = html.match(/<title>Read\s+([^|]+?)\s*\|\s*Cubari<\/title>/i);
+                    if (titleMatch && titleMatch[1]) title = titleMatch[1].trim();
+                  }
+                }
+              } catch (_) {}
+            }
+
+            if (!coverUrl) {
+              try {
+                const resp = await fetch(`https://nhentai.to/g/${id}`);
+                if (resp.ok) {
+                  const html = await resp.text();
+                  const coverMatch = html.match(/id="cover"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"/i)
+                    || html.match(/<img[^>]+src="([^"]+cover[^"]*)"/i);
+                  if (coverMatch && coverMatch[1]) coverUrl = coverMatch[1];
+                  if (!title) {
+                    const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+                    if (titleMatch && titleMatch[1]) title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+                  }
+                }
+              } catch (_) {}
+            }
           }
 
           const rawTitle = title;
@@ -95,7 +112,8 @@ function nhentaiDevProxyPlugin(): Plugin {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('Access-Control-Allow-Origin', '*');
           res.end(JSON.stringify({ 
-            id, 
+            id,
+            source,
             title: translatedTitle, 
             originalTitle: rawTitle,
             coverUrl 
