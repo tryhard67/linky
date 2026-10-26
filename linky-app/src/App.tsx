@@ -15,13 +15,13 @@ function App() {
   const [user, setUser] = useState<AuthModel | null>(pb.authStore.model);
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  
+
   const [showLogin, setShowLogin] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [editingItem, setEditingItem] = useState<Doujin | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [isInitialLoad, setIsInitialLoad] = useState(false);
+  const [_, setIsInitialLoad] = useState(false);
 
   useEffect(() => {
     return pb.authStore.onChange((_token, model) => {
@@ -84,20 +84,20 @@ function App() {
               👤 {user?.username}
             </span>
             <div className="nav-actions">
-              <button 
-                onClick={() => { setEditingItem(null); setShowForm(true); }} 
+              <button
+                onClick={() => { setEditingItem(null); setShowForm(true); }}
                 className="btn nav-btn"
               >
                 + Add
               </button>
-              <button 
-                onClick={() => setShowBulkImport(true)} 
+              <button
+                onClick={() => setShowBulkImport(true)}
                 className="btn nav-btn"
               >
                 Bulk Import
               </button>
-              <button 
-                onClick={handleLogout} 
+              <button
+                onClick={handleLogout}
                 className="btn btn-danger nav-btn"
               >
                 Logout
@@ -140,9 +140,9 @@ function App() {
 
       {/* Add/Edit Modal */}
       {showForm && isLoggedIn && (
-        <DoujinsManager 
-          pb={pb} 
-          userId={user?.id || ''} 
+        <DoujinsManager
+          pb={pb}
+          userId={user?.id || ''}
           itemToEdit={editingItem}
           onClose={() => {
             setShowForm(false);
