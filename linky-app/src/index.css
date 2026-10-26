@@ -273,6 +273,37 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.category-filter {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.category-filter-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  color: #a3a3a3;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.category-filter-btn:hover {
+  color: #ffffff;
+  border-color: var(--glass-border-hover);
+}
+
+.category-filter-btn.active {
+  background: var(--primary);
+  color: var(--primary-text);
+  border-color: var(--primary);
+}
+
 .library-count-badge {
   font-size: 0.85rem;
   color: var(--muted);
@@ -518,6 +549,19 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+}
+
+.library-category-badge {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  color: #888;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  text-transform: capitalize;
 }
 
 /* Card Action Buttons */

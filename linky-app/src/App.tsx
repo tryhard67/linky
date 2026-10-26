@@ -14,30 +14,42 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(pb.authStore.isValid);
   const [user, setUser] = useState<AuthModel | null>(pb.authStore.model);
   const [error, setError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   const [showLogin, setShowLogin] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [editingItem, setEditingItem] = useState<Doujin | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isInitialLoad, setIsInitialLoad] = useState(false);
 
   useEffect(() => {
     return pb.authStore.onChange((_token, model) => {
       setIsLoggedIn(pb.authStore.isValid);
       setUser(model);
-      if (pb.authStore.isValid) setShowLogin(false);
+      if (pb.authStore.isValid) {
+        setShowLogin(false);
+        // Trigger content reload after login
+        setIsInitialLoad(true);
+        setRefreshTrigger(prev => prev + 1);
+        // Brief delay so Library has time to mount/fetch
+        setTimeout(() => setIsInitialLoad(false), 1500);
+      }
     });
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoggingIn(true);
     try {
       await pb.collection('users').authWithPassword(username, password);
       setUsername('');
       setPassword('');
     } catch (err: any) {
       setError('Failed to login. Please check credentials.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -109,15 +121,17 @@ function App() {
             <form onSubmit={handleLogin}>
               <div className="input-group">
                 <label>Username</label>
-                <input type="text" value={username} onChange={e => setUsername(e.target.value)} required />
+                <input type="text" value={username} onChange={e => setUsername(e.target.value)} required disabled={isLoggingIn} />
               </div>
               <div className="input-group">
                 <label>Password</label>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isLoggingIn} />
               </div>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-                <button type="submit" className="btn" style={{ flex: 1 }}>Login</button>
-                <button type="button" onClick={() => setShowLogin(false)} className="btn btn-danger" style={{ flex: 1 }}>Cancel</button>
+                <button type="submit" className="btn" style={{ flex: 1, opacity: isLoggingIn ? 0.6 : 1 }} disabled={isLoggingIn}>
+                  {isLoggingIn ? 'Logging in...' : 'Login'}
+                </button>
+                <button type="button" onClick={() => setShowLogin(false)} className="btn btn-danger" style={{ flex: 1 }} disabled={isLoggingIn}>Cancel</button>
               </div>
             </form>
           </div>

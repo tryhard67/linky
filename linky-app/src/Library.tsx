@@ -14,6 +14,7 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const observer = useRef<IntersectionObserver | null>(null);
 
   const [itemToDelete, setItemToDelete] = useState<Doujin | null>(null);
@@ -36,12 +37,15 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     } catch {}
   };
 
-  const fetchPage = async (pageToFetch: number, isRefresh: boolean = false) => {
+  const fetchPage = async (pageToFetch: number, isRefresh: boolean = false, category?: string) => {
     if (loading) return;
     setLoading(true);
     try {
-      // Filter by current logged in user if available
-      const filterStr = userId ? `user = "${userId}"` : '';
+      const activeCategory = category ?? categoryFilter;
+      const filters: string[] = [];
+      if (userId) filters.push(`user = "${userId}"`);
+      if (activeCategory !== 'all') filters.push(`category = "${activeCategory}"`);
+      const filterStr = filters.join(' && ');
       const res = await pb.collection<Doujin>('doujins').getList(pageToFetch, 20, {
         sort: '-created',
         filter: filterStr,
@@ -61,9 +65,18 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
 
   useEffect(() => {
     setPage(1);
+    setDoujins([]);
     setHasMore(true);
     fetchPage(1, true);
-  }, [pb, refreshTrigger]); // Reload when refreshTrigger changes
+  }, [pb, userId, refreshTrigger, categoryFilter]); // Reload when refreshTrigger, user, or category changes
+
+  const handleCategoryChange = (cat: string) => {
+    if (cat === categoryFilter) return;
+    setCategoryFilter(cat);
+    setPage(1);
+    setDoujins([]);
+    setHasMore(true);
+  };
 
   const lastElementRef = useCallback((node: HTMLDivElement) => {
     if (loading) return;
@@ -96,6 +109,12 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     }
   };
 
+  const categories = [
+    { value: 'all', label: 'All' },
+    { value: 'manga', label: '📖 Manga' },
+    { value: 'video', label: '▶️ Video' }
+  ];
+
   return (
     <div className="library-container">
       <div className="library-toolbar">
@@ -104,35 +123,54 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
             <span className="library-count-badge">{doujins.length} items</span>
           )}
         </div>
-        <div className="library-view-switcher">
-          <span className="switcher-label">View:</span>
-          <div className="switcher-group">
-            <button
-              type="button"
-              className={`switcher-btn ${mobileCols === '1' ? 'active' : ''}`}
-              onClick={() => handleToggleMobileCols('1')}
-              title="Single column"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-              </svg>
-              <span>1 Col</span>
-            </button>
-            <button
-              type="button"
-              className={`switcher-btn ${mobileCols === '2' ? 'active' : ''}`}
-              onClick={() => handleToggleMobileCols('2')}
-              title="Double column"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="3" y="3" width="8" height="18" rx="1.5" />
-                <rect x="13" y="3" width="8" height="18" rx="1.5" />
-              </svg>
-              <span>2 Col</span>
-            </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {userId && (
+          <div className="library-view-switcher">
+            <span className="switcher-label">View:</span>
+            <div className="switcher-group">
+              <button
+                type="button"
+                className={`switcher-btn ${mobileCols === '1' ? 'active' : ''}`}
+                onClick={() => handleToggleMobileCols('1')}
+                title="Single column"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                </svg>
+                <span>1 Col</span>
+              </button>
+              <button
+                type="button"
+                className={`switcher-btn ${mobileCols === '2' ? 'active' : ''}`}
+                onClick={() => handleToggleMobileCols('2')}
+                title="Double column"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="3" y="3" width="8" height="18" rx="1.5" />
+                  <rect x="13" y="3" width="8" height="18" rx="1.5" />
+                </svg>
+                <span>2 Col</span>
+              </button>
+            </div>
           </div>
+          )}
         </div>
       </div>
+
+      {userId && (
+      <div className="category-filter">
+        {categories.map(cat => (
+          <button
+            key={cat.value}
+            type="button"
+            className={`category-filter-btn ${categoryFilter === cat.value ? 'active' : ''}`}
+            onClick={() => handleCategoryChange(cat.value)}
+          >
+            {cat.label}
+          </button>
+        ))}
+      </div>
+      )}
 
       <div className={`library-grid ${mobileCols === '2' ? 'cols-2' : 'cols-1'}`}>
         {doujins.map((item, index) => {
@@ -163,6 +201,11 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
                     <span className="library-source-badge">
                       {item.nhurl.includes('youtube') || item.nhurl.includes('youtu.be') ? '▶ YouTube' : item.nhurl.includes('nhentai') ? '📖 nhentai' : '🔗 Link'}
                     </span>
+                    {item.category && (
+                      <span className="library-category-badge">
+                        {item.category === 'manga' ? '📖' : item.category === 'doujinshi' ? '📕' : item.category === 'video' ? '▶️' : '🔗'} {item.category}
+                      </span>
+                    )}
                   </div>
                 </div>
               </a>
@@ -190,7 +233,29 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
         })}
       </div>
       
-      {loading && (
+      {loading && doujins.length === 0 && (
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          padding: '4rem 2rem', 
+          color: '#888',
+          gap: '1rem'
+        }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            border: '3px solid rgba(255,255,255,0.1)',
+            borderTopColor: '#fff',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+          <span style={{ fontSize: '0.9rem' }}>Loading your library...</span>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+      {loading && doujins.length > 0 && (
         <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>Loading more...</div>
       )}
       {!hasMore && doujins.length > 0 && (

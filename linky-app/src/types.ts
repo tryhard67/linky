@@ -9,4 +9,5 @@ export interface Doujin {
   thumb: string;
   user: string;
   code: number;
+  category: string;
 }

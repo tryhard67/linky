@@ -137,6 +137,9 @@ export default function BulkImportModal({ pb, userId, onClose, onSuccess }: Prop
         submitData.append('field', title);
         submitData.append('user', userId);
         submitData.append('code', code.toString());
+        // Auto-detect category based on URL
+        const category = (ytMatch) ? 'video' : (nhMatch) ? 'doujinshi' : 'manga';
+        submitData.append('category', category);
 
         if (imageBlob) {
           submitData.append('thumb', imageBlob, filename);

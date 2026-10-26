@@ -109,7 +109,8 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
     nhurl: itemToEdit?.nhurl || '',
     field: itemToEdit?.field || '',
     user: itemToEdit?.user || userId,
-    code: itemToEdit?.code || 0
+    code: itemToEdit?.code || 0,
+    category: itemToEdit?.category || 'manga'
   });
 
   useEffect(() => {
@@ -217,7 +218,7 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
     return () => { if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); };
   }, [formData.nhurl, itemToEdit, manualFile]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: name === 'code' ? parseInt(value) || 0 : value }));
   };
@@ -285,6 +286,7 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
       submitData.append('field', formData.field);
       submitData.append('user', formData.user || userId);
       submitData.append('code', formData.code.toString());
+      submitData.append('category', formData.category || 'manga');
 
       if (imageBlob) {
         submitData.append('thumb', imageBlob, filename || 'thumb.jpg');
@@ -344,6 +346,32 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
           <div className="input-group">
             <label>Code</label>
             <input type="number" name="code" value={formData.code || ''} onChange={handleInputChange} required />
+          </div>
+
+          <div className="input-group">
+            <label>Category</label>
+            <select
+              name="category"
+              value={formData.category}
+              onChange={handleInputChange}
+              style={{
+                width: '100%',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                background: '#000000',
+                border: '1px solid var(--glass-border)',
+                color: 'white',
+                fontSize: '1rem',
+                cursor: 'pointer',
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 1rem center'
+              }}
+            >
+              <option value="manga">📖 Manga</option>
+              <option value="video">▶️ Video</option>
+            </select>
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
