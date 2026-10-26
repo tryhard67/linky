@@ -304,6 +304,18 @@ body {
   border-color: var(--primary);
 }
 
+.category-filter-btn.clear-filters-btn {
+  background: transparent;
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #f87171;
+}
+
+.category-filter-btn.clear-filters-btn:hover {
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.7);
+}
+
 .library-count-badge {
   font-size: 0.85rem;
   color: var(--muted);
@@ -414,6 +426,7 @@ body {
    ========================================================================== */
 
 .library-item {
+  position: relative;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 10px;
@@ -600,4 +613,94 @@ body {
     padding: 0.35rem 0.25rem;
     font-size: 0.75rem;
   }
+}
+
+.library-search {
+  position: relative;
+  min-width: min(100%, 240px);
+}
+
+.library-search input {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 0.85rem;
+  border-radius: 8px;
+  background: #000000;
+  border: 1px solid var(--glass-border);
+  color: white;
+  font-size: 0.875rem;
+}
+
+.library-search input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.library-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.75rem;
+}
+
+.favorite-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.72);
+  color: #e5e5e5;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.favorite-btn:hover,
+.favorite-btn.is-favorite {
+  color: #facc15;
+  border-color: rgba(250, 204, 21, 0.45);
+}
+
+.library-animated-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #7dd3fc;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.animated-prompt-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 5;
+  border-radius: 12px;
+}
+
+.animated-prompt-panel {
+  width: 100%;
+  max-width: 420px;
+  padding: 1.5rem;
 }

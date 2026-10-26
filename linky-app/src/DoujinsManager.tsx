@@ -16,6 +16,7 @@ interface Props {
 export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSuccess }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [showAnimatedPrompt, setShowAnimatedPrompt] = useState(false);
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [manualFile, setManualFile] = useState<File | null>(null);
@@ -110,7 +111,9 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
     field: itemToEdit?.field || '',
     user: itemToEdit?.user || userId,
     code: itemToEdit?.code || 0,
-    category: itemToEdit?.category || 'manga'
+    category: itemToEdit?.category || 'manga',
+    isFavorite: itemToEdit?.isFavorite ?? false,
+    isAnimated: itemToEdit?.isAnimated ?? false
   });
 
   useEffect(() => {
@@ -250,6 +253,15 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (formData.category === 'video') {
+      setShowAnimatedPrompt(true);
+      return;
+    }
+    await saveRecord(false);
+  };
+
+  const saveRecord = async (isAnimated: boolean) => {
+    setShowAnimatedPrompt(false);
     setIsSubmitting(true);
 
     try {
@@ -287,6 +299,8 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
       submitData.append('user', formData.user || userId);
       submitData.append('code', formData.code.toString());
       submitData.append('category', formData.category || 'manga');
+      submitData.append('isFavorite', String(formData.isFavorite ?? false));
+      submitData.append('isAnimated', String(formData.category === 'video' ? isAnimated : false));
 
       if (imageBlob) {
         submitData.append('thumb', imageBlob, filename || 'thumb.jpg');
@@ -485,6 +499,53 @@ export default function DoujinsManager({ pb, userId, itemToEdit, onClose, onSucc
           </div>
         </form>
       </div>
+
+      {showAnimatedPrompt && (
+        <div className="animated-prompt-overlay">
+          <div className="glass-panel animated-prompt-panel">
+            <h3 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Is this video animated?</h3>
+            <p style={{ color: '#aaa', fontSize: '0.9rem', lineHeight: 1.5, margin: '0 0 1.5rem 0' }}>
+              Choose whether <strong style={{ color: '#fff' }}>"{formData.field || 'this video'}"</strong> should be marked as animated.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn"
+                disabled={isSubmitting}
+                onClick={() => saveRecord(true)}
+                style={{ flex: 1 }}
+              >
+                Yes, animated
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={isSubmitting}
+                onClick={() => saveRecord(false)}
+                style={{ flex: 1, background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)' }}
+              >
+                No
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAnimatedPrompt(false)}
+              disabled={isSubmitting}
+              style={{
+                marginTop: '1rem',
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                color: '#888',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              Back to form
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

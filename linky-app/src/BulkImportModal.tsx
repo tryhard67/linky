@@ -140,6 +140,8 @@ export default function BulkImportModal({ pb, userId, onClose, onSuccess }: Prop
         // Auto-detect category based on URL
         const category = (ytMatch) ? 'video' : (nhMatch) ? 'doujinshi' : 'manga';
         submitData.append('category', category);
+        submitData.append('isFavorite', 'false');
+        submitData.append('isAnimated', 'false');
 
         if (imageBlob) {
           submitData.append('thumb', imageBlob, filename);

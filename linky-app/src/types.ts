@@ -10,4 +10,6 @@ export interface Doujin {
   user: string;
   code: number;
   category: string;
+  isFavorite: boolean;
+  isAnimated: boolean;
 }

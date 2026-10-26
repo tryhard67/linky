@@ -2,6 +2,38 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import PocketBase from 'pocketbase';
 import { type Doujin } from './types';
 
+function escapeFilterValue(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+type LibraryQuery = {
+  category: string;
+  favorites: boolean;
+  q: string;
+  cols: '1' | '2';
+};
+
+function parseLibraryQuery(): LibraryQuery {
+  const params = new URLSearchParams(window.location.search);
+  const category = params.get('category') || 'all';
+  return {
+    category: category === 'manga' || category === 'video' ? category : 'all',
+    favorites: params.get('favorites') === '1',
+    q: params.get('q') ?? '',
+    cols: params.get('cols') === '2' ? '2' : '1'
+  };
+}
+
+function libraryQueryToSearch(query: LibraryQuery) {
+  const params = new URLSearchParams();
+  if (query.category !== 'all') params.set('category', query.category);
+  if (query.favorites) params.set('favorites', '1');
+  if (query.q.trim()) params.set('q', query.q.trim());
+  if (query.cols === '2') params.set('cols', '2');
+  const qs = params.toString();
+  return `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
+}
+
 interface Props {
   pb: PocketBase;
   userId?: string;
@@ -14,37 +46,67 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [libraryQuery, setLibraryQuery] = useState<LibraryQuery>(() => parseLibraryQuery());
+  const [searchInput, setSearchInput] = useState(() => parseLibraryQuery().q);
   const observer = useRef<IntersectionObserver | null>(null);
+  const categoryFilter = userId ? libraryQuery.category : 'all';
+  const favoritesOnly = Boolean(userId && libraryQuery.favorites);
+  const searchQuery = userId ? libraryQuery.q.trim() : '';
+  const hasActiveFilters = categoryFilter !== 'all' || favoritesOnly || Boolean(searchQuery);
 
+  const mobileCols = libraryQuery.cols;
   const [itemToDelete, setItemToDelete] = useState<Doujin | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
-  const [mobileCols, setMobileCols] = useState<'1' | '2'>(() => {
-    try {
-      const saved = localStorage.getItem('linky_mobile_cols');
-      return saved === '2' ? '2' : '1';
-    } catch {
-      return '1';
+  const commitLibraryQuery = useCallback((next: LibraryQuery, mode: 'push' | 'replace') => {
+    const normalized: LibraryQuery = {
+      category: next.category === 'manga' || next.category === 'video' ? next.category : 'all',
+      favorites: Boolean(next.favorites),
+      q: next.q.trim(),
+      cols: next.cols === '2' ? '2' : '1'
+    };
+    setLibraryQuery(normalized);
+    const url = libraryQueryToSearch(normalized);
+    if (mode === 'push') {
+      window.history.pushState(normalized, '', url);
+    } else {
+      window.history.replaceState(normalized, '', url);
     }
-  });
+  }, []);
 
   const handleToggleMobileCols = (cols: '1' | '2') => {
-    setMobileCols(cols);
-    try {
-      localStorage.setItem('linky_mobile_cols', cols);
-    } catch {}
+    if (cols === libraryQuery.cols) return;
+    commitLibraryQuery({ ...libraryQuery, cols }, 'replace');
   };
 
-  const fetchPage = async (pageToFetch: number, isRefresh: boolean = false, category?: string) => {
+  useEffect(() => {
+    const onPopState = () => {
+      const next = parseLibraryQuery();
+      setLibraryQuery(next);
+      setSearchInput(next.q);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput.trim() === libraryQuery.q) return;
+      commitLibraryQuery({ ...libraryQuery, q: searchInput }, 'replace');
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchInput, libraryQuery, commitLibraryQuery]);
+
+  const fetchPage = async (pageToFetch: number, isRefresh: boolean = false) => {
     if (loading) return;
     setLoading(true);
     try {
-      const activeCategory = category ?? categoryFilter;
       const filters: string[] = [];
       if (userId) filters.push(`user = "${userId}"`);
-      if (activeCategory !== 'all') filters.push(`category = "${activeCategory}"`);
+      if (categoryFilter !== 'all') filters.push(`category = "${categoryFilter}"`);
+      if (favoritesOnly) filters.push('isFavorite = true');
+      if (userId && searchQuery) filters.push(`field ~ "${escapeFilterValue(searchQuery)}"`);
       const filterStr = filters.join(' && ');
       const res = await pb.collection<Doujin>('doujins').getList(pageToFetch, 20, {
         sort: '-created',
@@ -68,14 +130,25 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     setDoujins([]);
     setHasMore(true);
     fetchPage(1, true);
-  }, [pb, userId, refreshTrigger, categoryFilter]); // Reload when refreshTrigger, user, or category changes
+  }, [pb, userId, refreshTrigger, categoryFilter, searchQuery, favoritesOnly]);
 
   const handleCategoryChange = (cat: string) => {
     if (cat === categoryFilter) return;
-    setCategoryFilter(cat);
-    setPage(1);
-    setDoujins([]);
-    setHasMore(true);
+    commitLibraryQuery({ ...libraryQuery, category: cat }, 'push');
+  };
+
+  const handleToggleFavorites = () => {
+    commitLibraryQuery({ ...libraryQuery, favorites: !favoritesOnly }, 'push');
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput('');
+    commitLibraryQuery({ ...libraryQuery, q: '' }, 'replace');
+  };
+
+  const handleClearFilters = () => {
+    setSearchInput('');
+    commitLibraryQuery({ category: 'all', favorites: false, q: '', cols: libraryQuery.cols }, 'push');
   };
 
   const lastElementRef = useCallback((node: HTMLDivElement) => {
@@ -92,6 +165,27 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     
     if (node) observer.current.observe(node);
   }, [loading, hasMore, page]);
+
+  const handleToggleFavorite = (item: Doujin) => {
+    if (!userId) return;
+    const nextFavorite = !item.isFavorite;
+    setDoujins(prev => {
+      const updated = prev.map(d => d.id === item.id ? { ...d, isFavorite: nextFavorite } : d);
+      if (favoritesOnly && !nextFavorite) {
+        return updated.filter(d => d.id !== item.id);
+      }
+      return updated;
+    });
+    pb.collection('doujins').update(item.id, { isFavorite: nextFavorite }).catch((err) => {
+      console.error('Failed to update favorite', err);
+      setDoujins(prev => {
+        const restored = prev.some(d => d.id === item.id)
+          ? prev.map(d => d.id === item.id ? { ...d, isFavorite: item.isFavorite } : d)
+          : [item, ...prev];
+        return restored;
+      });
+    });
+  };
 
   const confirmDelete = async () => {
     if (!itemToDelete) return;
@@ -123,8 +217,28 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
             <span className="library-count-badge">{doujins.length} items</span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {userId && (
+          <>
+          <div className="library-search">
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by title..."
+              aria-label="Search by title"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                className="library-search-clear"
+                onClick={handleClearSearch}
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
           <div className="library-view-switcher">
             <span className="switcher-label">View:</span>
             <div className="switcher-group">
@@ -153,6 +267,7 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
               </button>
             </div>
           </div>
+          </>
           )}
         </div>
       </div>
@@ -169,6 +284,22 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
             {cat.label}
           </button>
         ))}
+        <button
+          type="button"
+          className={`category-filter-btn ${favoritesOnly ? 'active' : ''}`}
+          onClick={handleToggleFavorites}
+        >
+          ⭐ Favorites
+        </button>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            className="category-filter-btn clear-filters-btn"
+            onClick={handleClearFilters}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
       )}
 
@@ -179,6 +310,25 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
           
           return (
             <div key={item.id} className="library-item" ref={isLast ? lastElementRef : null}>
+              {userId && (
+                <button
+                  type="button"
+                  className={`favorite-btn ${item.isFavorite ? 'is-favorite' : ''}`}
+                  onClick={() => handleToggleFavorite(item)}
+                  title={item.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-label={item.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+                      fill={item.isFavorite ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              )}
               <a href={item.nhurl} target="_blank" rel="noreferrer" className="library-item-link">
                 <div className="library-thumb-wrapper">
                   {imgUrl ? (
@@ -188,6 +338,9 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
                       <span style={{ fontSize: '1.5rem' }}>🖼️</span>
                       <span>No Thumbnail</span>
                     </div>
+                  )}
+                  {item.isAnimated && (
+                    <span className="library-animated-badge">✨ Animated</span>
                   )}
                   {item.code ? (
                     <span className="library-code-badge">#{item.code}</span>
@@ -257,6 +410,11 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
       )}
       {loading && doujins.length > 0 && (
         <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>Loading more...</div>
+      )}
+      {userId && !loading && doujins.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#888' }}>
+          {hasActiveFilters ? 'No items match your search.' : 'No items yet.'}
+        </div>
       )}
       {!hasMore && doujins.length > 0 && (
         <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>No more items</div>
