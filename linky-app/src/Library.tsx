@@ -139,6 +139,13 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
   };
 
   useEffect(() => {
+    if (!userId) {
+      // Guests: nothing to fetch, don't show any loading state
+      setPage(1);
+      setDoujins([]);
+      setHasMore(false);
+      return;
+    }
     setPage(1);
     setDoujins([]);
     setHasMore(true);
@@ -440,7 +447,7 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
         })}
       </div>
       
-      {loading && doujins.length === 0 && (
+      {userId && loading && doujins.length === 0 && (
         <div style={{ 
           display: 'flex', 
           flexDirection: 'column', 
@@ -462,10 +469,20 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
-      {loading && doujins.length > 0 && (
+      {userId && loading && doujins.length > 0 && (
         <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>Loading more...</div>
       )}
-      {userId && !loading && doujins.length === 0 && (
+      {!userId ? (
+        <div style={{ textAlign: 'center', padding: '4rem 1rem', color: '#888' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔐</div>
+          <div style={{ fontSize: '1.05rem', color: '#ccc', marginBottom: '0.4rem' }}>
+            Log in to view your library
+          </div>
+          <div style={{ fontSize: '0.85rem' }}>
+            Click <strong>Admin Login</strong> in the navigation bar to get started.
+          </div>
+        </div>
+      ) : !loading && doujins.length === 0 && (
         <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#888' }}>
           {hasActiveFilters ? 'No items match your search.' : 'No items yet.'}
         </div>
