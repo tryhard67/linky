@@ -11,5 +11,5 @@ export interface Doujin {
   code: number;
   category: string;
   isFavorite: boolean;
-  isAnimated: boolean;
+  isAnimated: boolean | undefined;
 }

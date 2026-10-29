@@ -10,6 +10,7 @@ type LibraryQuery = {
   category: string;
   favorites: boolean;
   animated: boolean;
+  notAnimated: boolean;
   q: string;
   cols: '1' | '2';
 };
@@ -22,6 +23,7 @@ function parseLibraryQuery(): LibraryQuery {
     category: normalizedCategory,
     favorites: params.get('favorites') === '1',
     animated: params.get('animated') === '1' && normalizedCategory === 'video',
+    notAnimated: params.get('notAnimated') === '1' && normalizedCategory === 'video',
     q: params.get('q') ?? '',
     cols: params.get('cols') === '2' ? '2' : '1'
   };
@@ -32,6 +34,7 @@ function libraryQueryToSearch(query: LibraryQuery) {
   if (query.category !== 'all') params.set('category', query.category);
   if (query.favorites) params.set('favorites', '1');
   if (query.animated && query.category === 'video') params.set('animated', '1');
+  if (query.notAnimated && query.category === 'video') params.set('notAnimated', '1');
   if (query.q.trim()) params.set('q', query.q.trim());
   if (query.cols === '2') params.set('cols', '2');
   const qs = params.toString();
@@ -56,8 +59,9 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
   const categoryFilter = userId ? libraryQuery.category : 'all';
   const favoritesOnly = Boolean(userId && libraryQuery.favorites);
   const animatedOnly = Boolean(userId && categoryFilter === 'video' && libraryQuery.animated);
+  const notAnimatedOnly = Boolean(userId && categoryFilter === 'video' && libraryQuery.notAnimated);
   const searchQuery = userId ? libraryQuery.q.trim() : '';
-  const hasActiveFilters = categoryFilter !== 'all' || favoritesOnly || animatedOnly || Boolean(searchQuery);
+  const hasActiveFilters = categoryFilter !== 'all' || favoritesOnly || animatedOnly || notAnimatedOnly || Boolean(searchQuery);
 
   const mobileCols = libraryQuery.cols;
   const [itemToDelete, setItemToDelete] = useState<Doujin | null>(null);
@@ -69,6 +73,7 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
       category: next.category === 'manga' || next.category === 'video' ? next.category : 'all',
       favorites: Boolean(next.favorites),
       animated: Boolean(next.animated) && next.category === 'video',
+      notAnimated: Boolean(next.notAnimated) && next.category === 'video',
       q: next.q.trim(),
       cols: next.cols === '2' ? '2' : '1'
     };
@@ -113,6 +118,7 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
       if (categoryFilter !== 'all') filters.push(`category = "${categoryFilter}"`);
       if (favoritesOnly) filters.push('isFavorite = true');
       if (animatedOnly) filters.push('isAnimated = true');
+      if (notAnimatedOnly) filters.push('isAnimated = false');
       if (userId && searchQuery) filters.push(`field ~ "${escapeFilterValue(searchQuery)}"`);
       const filterStr = filters.join(' && ');
       const res = await pb.collection<Doujin>('doujins').getList(pageToFetch, 20, {
@@ -137,14 +143,15 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     setDoujins([]);
     setHasMore(true);
     fetchPage(1, true);
-  }, [pb, userId, refreshTrigger, categoryFilter, searchQuery, favoritesOnly, animatedOnly]);
+  }, [pb, userId, refreshTrigger, categoryFilter, searchQuery, favoritesOnly, animatedOnly, notAnimatedOnly]);
 
   const handleCategoryChange = (cat: string) => {
     if (cat === categoryFilter) return;
     commitLibraryQuery({
       ...libraryQuery,
       category: cat,
-      animated: cat === 'video' ? libraryQuery.animated : false
+      animated: cat === 'video' ? libraryQuery.animated : false,
+      notAnimated: cat === 'video' ? libraryQuery.notAnimated : false
     }, 'push');
   };
 
@@ -156,7 +163,17 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     commitLibraryQuery({
       ...libraryQuery,
       category: 'video',
-      animated: !animatedOnly
+      animated: !animatedOnly,
+      notAnimated: false
+    }, 'push');
+  };
+
+  const handleToggleNotAnimated = () => {
+    commitLibraryQuery({
+      ...libraryQuery,
+      category: 'video',
+      animated: false,
+      notAnimated: !notAnimatedOnly
     }, 'push');
   };
 
@@ -167,7 +184,7 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
 
   const handleClearFilters = () => {
     setSearchInput('');
-    commitLibraryQuery({ category: 'all', favorites: false, animated: false, q: '', cols: libraryQuery.cols }, 'push');
+    commitLibraryQuery({ category: 'all', favorites: false, animated: false, notAnimated: false, q: '', cols: libraryQuery.cols }, 'push');
   };
 
   const lastElementRef = useCallback((node: HTMLDivElement) => {
@@ -311,13 +328,22 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
           ⭐ Favorites
         </button>
         {categoryFilter === 'video' && (
-          <button
-            type="button"
-            className={`category-filter-btn ${animatedOnly ? 'active' : ''}`}
-            onClick={handleToggleAnimated}
-          >
-            ✨ Animated
-          </button>
+          <>
+            <button
+              type="button"
+              className={`category-filter-btn ${animatedOnly ? 'active' : ''}`}
+              onClick={handleToggleAnimated}
+            >
+              ✨ Animated
+            </button>
+            <button
+              type="button"
+              className={`category-filter-btn ${notAnimatedOnly ? 'active' : ''}`}
+              onClick={handleToggleNotAnimated}
+            >
+              Not Animated
+            </button>
+          </>
         )}
         {hasActiveFilters && (
           <button
