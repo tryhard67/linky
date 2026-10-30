@@ -14,7 +14,7 @@ type LibraryQuery = {
   animated: boolean;
   notAnimated: boolean;
   q: string;
-  cols: '1' | '2';
+  cols: '1' | '2' | '3';
 };
 
 function parseLibraryQuery(): LibraryQuery {
@@ -27,7 +27,7 @@ function parseLibraryQuery(): LibraryQuery {
     animated: params.get('animated') === '1' && normalizedCategory === 'video',
     notAnimated: params.get('notAnimated') === '1' && normalizedCategory === 'video',
     q: params.get('q') ?? '',
-    cols: params.get('cols') === '2' ? '2' : '1'
+    cols: params.get('cols') === '2' || params.get('cols') === '3' ? (params.get('cols') as '2' | '3') : '1'
   };
 }
 
@@ -38,7 +38,7 @@ function libraryQueryToSearch(query: LibraryQuery) {
   if (query.animated && query.category === 'video') params.set('animated', '1');
   if (query.notAnimated && query.category === 'video') params.set('notAnimated', '1');
   if (query.q.trim()) params.set('q', query.q.trim());
-  if (query.cols === '2') params.set('cols', '2');
+  if (query.cols !== '1') params.set('cols', query.cols);
   const qs = params.toString();
   return `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
 }
@@ -80,7 +80,7 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
       animated: Boolean(next.animated) && next.category === 'video',
       notAnimated: Boolean(next.notAnimated) && next.category === 'video',
       q: next.q.trim(),
-      cols: next.cols === '2' ? '2' : '1'
+      cols: next.cols === '2' || next.cols === '3' ? next.cols : '1'
     };
     setLibraryQuery(normalized);
     const url = libraryQueryToSearch(normalized);
@@ -91,7 +91,7 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     }
   }, []);
 
-  const handleToggleMobileCols = (cols: '1' | '2') => {
+  const handleToggleMobileCols = (cols: '1' | '2' | '3') => {
     if (cols === libraryQuery.cols) return;
     commitLibraryQuery({ ...libraryQuery, cols }, 'replace');
   };
@@ -339,6 +339,19 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
                 </svg>
                 <span>2 Col</span>
               </button>
+              <button
+                type="button"
+                className={`switcher-btn ${mobileCols === '3' ? 'active' : ''}`}
+                onClick={() => handleToggleMobileCols('3')}
+                title="Triple column"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="3" y="3" width="5" height="18" rx="1" />
+                  <rect x="9.5" y="3" width="5" height="18" rx="1" />
+                  <rect x="16" y="3" width="5" height="18" rx="1" />
+                </svg>
+                <span>3 Col</span>
+              </button>
             </div>
           </div>
           </>
@@ -395,7 +408,7 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
       </div>
       )}
 
-      <div className={`library-grid ${mobileCols === '2' ? 'cols-2' : 'cols-1'}`}>
+      <div className={`library-grid ${mobileCols === '2' ? 'cols-2' : mobileCols === '3' ? 'cols-3' : 'cols-1'}`}>
         {doujins.map((item, index) => {
           const isLast = index === doujins.length - 1;
           const imgUrl = item.thumb ? `${import.meta.env.VITE_POCKETBASE_URL}/api/files/${item.collectionId}/${item.id}/${item.thumb}` : null;
