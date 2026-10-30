@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import PocketBase from 'pocketbase';
 import { type Doujin } from './types';
 
+const PAGE_SIZE = 20;
+
 function escapeFilterValue(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
@@ -50,12 +52,15 @@ interface Props {
 
 export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
   const [doujins, setDoujins] = useState<Doujin[]>([]);
-  const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [libraryQuery, setLibraryQuery] = useState<LibraryQuery>(() => parseLibraryQuery());
   const [searchInput, setSearchInput] = useState(() => parseLibraryQuery().q);
   const observer = useRef<IntersectionObserver | null>(null);
+  const fetchGeneration = useRef(0);
+  const loadingRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const pageRef = useRef(1);
   const categoryFilter = userId ? libraryQuery.category : 'all';
   const favoritesOnly = Boolean(userId && libraryQuery.favorites);
   const animatedOnly = Boolean(userId && categoryFilter === 'video' && libraryQuery.animated);
@@ -109,48 +114,76 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     return () => clearTimeout(timer);
   }, [searchInput, libraryQuery, commitLibraryQuery]);
 
-  const fetchPage = async (pageToFetch: number, isRefresh: boolean = false) => {
-    if (loading) return;
+  const itemMatchesFilters = useCallback((item: Doujin) => {
+    if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
+    if (favoritesOnly && !item.isFavorite) return false;
+    if (animatedOnly && !item.isAnimated) return false;
+    if (notAnimatedOnly && item.isAnimated) return false;
+    if (searchQuery) {
+      const title = (item.field || '').toLowerCase();
+      if (!title.includes(searchQuery.toLowerCase())) return false;
+    }
+    return true;
+  }, [categoryFilter, favoritesOnly, animatedOnly, notAnimatedOnly, searchQuery]);
+
+  const fetchPage = useCallback(async (pageToFetch: number, isRefresh: boolean = false) => {
+    if (!userId) return;
+    if (!isRefresh && (loadingRef.current || !hasMoreRef.current)) return;
+
+    const generation = isRefresh ? ++fetchGeneration.current : fetchGeneration.current;
+    loadingRef.current = true;
     setLoading(true);
     try {
-      const filters: string[] = [];
-      if (userId) filters.push(`user = "${userId}"`);
+      const filters: string[] = [`user = "${userId}"`];
       if (categoryFilter !== 'all') filters.push(`category = "${categoryFilter}"`);
       if (favoritesOnly) filters.push('isFavorite = true');
       if (animatedOnly) filters.push('isAnimated = true');
       if (notAnimatedOnly) filters.push('isAnimated = false');
-      if (userId && searchQuery) filters.push(`field ~ "${escapeFilterValue(searchQuery)}"`);
-      const filterStr = filters.join(' && ');
-      const res = await pb.collection<Doujin>('doujins').getList(pageToFetch, 20, {
+      if (searchQuery) filters.push(`field ~ "${escapeFilterValue(searchQuery)}"`);
+      const res = await pb.collection<Doujin>('doujins').getList(pageToFetch, PAGE_SIZE, {
         sort: '-created',
-        filter: filterStr,
-        $autoCancel: false 
+        filter: filters.join(' && '),
+        $autoCancel: false
       });
-      
-      setDoujins(prev => isRefresh ? res.items : [...prev, ...res.items]);
-      setHasMore(res.page < res.totalPages);
+
+      if (generation !== fetchGeneration.current) return;
+
+      const items = res.items.filter(itemMatchesFilters);
+      setDoujins(prev => isRefresh ? items : [...prev, ...items]);
+      const more = items.length > 0 && res.items.length === PAGE_SIZE && res.page < res.totalPages;
+      hasMoreRef.current = more;
+      setHasMore(more);
+      pageRef.current = pageToFetch;
     } catch (err: any) {
+      if (generation !== fetchGeneration.current) return;
       if (!err.isAbort) {
         console.error("Failed to load library", err);
       }
     } finally {
-      setLoading(false);
+      if (generation === fetchGeneration.current) {
+        loadingRef.current = false;
+        setLoading(false);
+      }
     }
-  };
+  }, [pb, userId, categoryFilter, searchQuery, favoritesOnly, animatedOnly, notAnimatedOnly, itemMatchesFilters]);
 
   useEffect(() => {
     if (!userId) {
-      // Guests: nothing to fetch, don't show any loading state
-      setPage(1);
+      fetchGeneration.current += 1;
+      loadingRef.current = false;
+      hasMoreRef.current = false;
+      pageRef.current = 1;
       setDoujins([]);
       setHasMore(false);
+      setLoading(false);
       return;
     }
-    setPage(1);
+    hasMoreRef.current = true;
+    pageRef.current = 1;
     setDoujins([]);
     setHasMore(true);
     fetchPage(1, true);
-  }, [pb, userId, refreshTrigger, categoryFilter, searchQuery, favoritesOnly, animatedOnly, notAnimatedOnly]);
+  }, [pb, userId, refreshTrigger, categoryFilter, searchQuery, favoritesOnly, animatedOnly, notAnimatedOnly, fetchPage]);
 
   const handleCategoryChange = (cat: string) => {
     if (cat === categoryFilter) return;
@@ -194,20 +227,18 @@ export default function Library({ pb, userId, onEdit, refreshTrigger }: Props) {
     commitLibraryQuery({ category: 'all', favorites: false, animated: false, notAnimated: false, q: '', cols: libraryQuery.cols }, 'push');
   };
 
-  const lastElementRef = useCallback((node: HTMLDivElement) => {
-    if (loading) return;
+  const lastElementRef = useCallback((node: HTMLDivElement | null) => {
     if (observer.current) observer.current.disconnect();
-    
+    if (!node || loading || !hasMore) return;
+
     observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        const nextPage = page + 1;
-        setPage(nextPage);
-        fetchPage(nextPage);
-      }
+      if (!entries[0].isIntersecting) return;
+      if (loadingRef.current || !hasMoreRef.current) return;
+      fetchPage(pageRef.current + 1);
     });
-    
-    if (node) observer.current.observe(node);
-  }, [loading, hasMore, page]);
+
+    observer.current.observe(node);
+  }, [loading, hasMore, fetchPage]);
 
   const handleToggleFavorite = (item: Doujin) => {
     if (!userId) return;
